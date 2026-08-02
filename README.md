@@ -21,9 +21,25 @@ ga_sop_skill/
 
 ## 快速开始
 
+> ⚠️ 手机版 GA 为 Android 嵌入式运行环境：**无 `git`、无 `pip`、无终端 `python` 命令**，请按平台选择下方方式。
+
+### 📱 手机版 GA（Android）
+
+手机 GA 的全部操作在对话中完成，无需命令行：
+
+1. **获取资源**：直接对 GA 说"下载 ga_sop_skill 仓库资源到对应目录"（GA 内置文件下载能力，无需 git），按类型存放：
+   - SOP 文档 → `ga/memory/`（GA 的 SOP 所在目录）
+   - 配套脚本 → `ga/` 根目录（放入后即可被 `import` 使用）
+   - Agent Skill → `ga/skills/`
+2. **依赖**：下载类脚本仅需 `requests`（GA 已内置，无需安装）
+   - 若某 SOP 需额外纯 Python 包（如 youtube-transcript-api）：GA 会自动按纯 Python 包离线方式安装（从 pypi.org 获取 wheel 解压到 `project/<lib>/`，再 `sys.path.insert` 导入），无需 pip
+3. **使用**：对 GA 说"用 douyin_download_sop 下载这个视频：https://v.douyin.com/xxxx/"，GA 会按对应 SOP 执行下载
+
+### 💻 电脑版 GA（PC）
+
 ```bash
 # 下载仓库
-git clone https://github.com/<your-name>/ga_sop_skill.git
+git clone https://github.com/wellsoren/ga_sop_skill.git
 
 # 安装依赖（脚本仅需 requests）
 pip install -r requirements.txt
@@ -34,8 +50,6 @@ python phone/scripts/douyin_download.py "https://v.douyin.com/xxxx/"
 # 示例：下载 B 站视频
 python phone/scripts/bilibili_download.py "https://b23.tv/xxxx"
 ```
-
-> 📱 在 Android 端 GA 中使用时，将 `phone/scripts/` 下脚本放入 GA 根目录（`ga/`）即可被 `import`。
 
 ## SOP 目录（当前版本）
 
