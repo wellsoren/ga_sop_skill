@@ -1,0 +1,17 @@
+# 密钥与凭证（禁止入库）
+mykey.py
+.github_token
+channels/
+*.json.enc
+keychain.enc
+
+# 运行时/临时
+__pycache__/
+*.pyc
+.part
+*.tmp
+
+# 内部状态
+.push_pending.json
+plan.json
+.file_manifest.json
