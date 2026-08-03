@@ -68,7 +68,13 @@ python phone/scripts/bilibili_download.py "https://b23.tv/xxxx"
 | [x_twitter_video_download_sop.md](phone/sop/x_twitter_video_download_sop.md) | X/Twitter 视频下载（fxtwitter 直链） | - |
 | [youtube_transcript_sop.md](phone/sop/youtube_transcript_sop.md) | YouTube 字幕提取（youtube-transcript-api） | - |
 
-> 更多类别（搜索、内容制作、手机操作、元能力等）陆续补充中。
+### 🔍 搜索类
+
+| SOP | 说明 | 配套脚本 |
+|-----|------|---------|
+| [xiaohongshu_hot_search_sop.md](phone/sop/xiaohongshu_hot_search_sop.md) | 小红书热搜/热门话题（App GUI：今日热搜榜+话题榜AI总结） | - |
+
+> 更多类别（内容制作、手机操作、元能力等）陆续补充中。
 
 ## 如何贡献
 
