@@ -1,6 +1,6 @@
 # GA SOP & Skill 资源库
 
-> 手机版 GA（GAndroid Agent）的通用 SOP 文档、配套脚本与 Agent Skill 资源库，供其他手机 GA 用户下载使用。
+> 开源手机版 GA（GAndroid Agent）的通用 SOP 文档、配套脚本与 Agent Skill 资源库，供其他手机 GA 用户下载使用。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -19,11 +19,6 @@ ga_sop_skill/
 └── .gitignore
 ```
 
-## 前置条件
-
-- 一台 **安卓手机**
-- 已安装 **GA App**（[下载地址](https://app.gaagent.ai/)）
-- 电脑已安装**GenericAgent**（[下载地址](https://github.com/lsdefine/GenericAgent)）
 ## 快速开始
 
 > ⚠️ 手机版 GA 为 Android 嵌入式运行环境：**无 `git`、无 `pip`、无终端 `python` 命令**，请按平台选择下方方式。
@@ -38,8 +33,7 @@ ga_sop_skill/
    - Agent Skill → `ga/skills/`
 2. **依赖**：下载类脚本仅需 `requests`（GA 已内置，无需安装）
    - 若某 SOP 需额外纯 Python 包（如 youtube-transcript-api）：GA 会自动按纯 Python 包离线方式安装（从 pypi.org 获取 wheel 解压到 `project/<lib>/`，再 `sys.path.insert` 导入），无需 pip
-3. **注册**：对GA说：`注册登记×××_sop到GA系统`（例如：注册登记douyin_download_sop到GA系统）
-3. **使用**：对 GA 说"下载这个抖音视频：https://v.douyin.com/xxxx/"，GA 会按对应 SOP 执行下载
+3. **使用**：对 GA 说"用 douyin_download_sop 下载这个视频：https://v.douyin.com/xxxx/"，GA 会按对应 SOP 执行下载
 
 ### 💻 电脑版 GA（PC）
 
@@ -92,9 +86,3 @@ python phone/scripts/bilibili_download.py "https://b23.tv/xxxx"
 ## 许可证
 
 [MIT](LICENSE) © 2026 ga_sop_skill contributors
-
-## 🙏 致谢
-
-- [GA App](https://app.gaagent.ai/) — app应用及相关代码支持
-- [GenericAgent](https://github.com/lsdefine/GenericAgent) — 提供应用及相关代码支持
-- 所有贡献者和用户
