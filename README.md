@@ -74,7 +74,21 @@ python phone/scripts/bilibili_download.py "https://b23.tv/xxxx"
 |-----|------|---------|
 | [xiaohongshu_hot_search_sop.md](phone/sop/xiaohongshu_hot_search_sop.md) | 小红书热搜/热门话题（App GUI：今日热搜榜+话题榜AI总结） | - |
 
-> 更多类别（内容制作、手机操作、元能力等）陆续补充中。
+### 🧭 规划/模式类
+
+| SOP | 说明 | 配套脚本 |
+|-----|------|---------|
+| [plan_sop.md](phone/sop/plan_sop.md) | 复杂任务规划模式（8 条件触发、官方 6 步探索、多方案权衡、用户确认门、独立评委验证） | - |
+| [goal_mode_sop.md](phone/sop/goal_mode_sop.md) | Goal Mode 目标模式（开放目标+时间预算，后台自治推进至收口，支持暂停/恢复） | `phone/scripts/goal_mode.py` |
+| [session_resume_sop.md](phone/sop/session_resume_sop.md) | 会话恢复（L4 存档/压缩/fullset 恢复/轮换 sid） | - |
+
+### 🔬 深度研究类
+
+| SOP | 说明 | 配套脚本 |
+|-----|------|---------|
+| [DeepResearch_sop_android.md](phone/sop/DeepResearch_sop_android.md) | Android 端深度研究（DAG 分解+混合并行+镜像回退+SYNTH 综合） | `phone/scripts/deepresearch_utils.py` |
+
+> 更多类别（内容制作、手机操作等）陆续补充中。
 
 ## 如何贡献
 
