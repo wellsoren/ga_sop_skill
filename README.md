@@ -1,6 +1,18 @@
 # GA SOP & Skill 资源库
 
-> 手机版 GA（GAndroid Agent）的通用 SOP 文档、配套脚本与 Agent Skill 资源库，供其他手机 GA 用户下载使用。
+> **手机版 GA，让手机成为真正的「随身 Agent」。**
+>
+> **手机版 GA（Generic Agent）**是一个运行在安卓手机上的 AI 智能体框架：没有命令行、没有 git、没有 pip，所有能力都靠自然语言对话驱动。
+>
+> 本仓库把经过反复实战验证过的 SOP 操作手册、可直接运行的配套脚本以及适配手机版 GA 的 Agent Skill 集中开源，让每位手机 GA 用户都能「下载即用、对话即得」——省去自己手搓的麻烦，节省大量 token，事半功倍。
+>
+> **特点**：
+>
+> - 🧩 **对话即接口**——对 GA 说一句话即可触发对应能力
+> - 📚 **SOP 即代码**——流程固化为可复用手册，新能力随时注册
+> - ⚙️ **脚本即插即用**——配套 Python 模块放入 GA 根目录即可 import
+> - 🔒 **安全克制**——公开内容经脱敏预检，零密钥零路径泄露
+> - 📱 **Android 原生适配**——无 git/pip 也能离线装包
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
