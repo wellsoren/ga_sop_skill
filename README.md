@@ -75,7 +75,7 @@ python phone/scripts/bilibili_download.py "https://b23.tv/xxxx"
 
 | SOP | 说明 | 配套脚本 |
 |-----|------|---------|
-| [douyin_download_sop.md](phone/sop/douyin_download_sop.md) | 抖音无水印视频下载（play API 取流、.part 校验） | `phone/scripts/douyin_download.py` |
+| [douyin_download_sop.md](phone/sop/douyin_download_sop.md) | 抖音无水印下载 v2.2（ttwid→detail 主通道、后台 webcdp 兜底、.part 校验） | `phone/scripts/douyin_download.py` |
 | [bilibili_download_sop.md](phone/sop/bilibili_download_sop.md) | B 站视频下载（view/playurl API、qn 清晰度） | `phone/scripts/bilibili_download.py` |
 | [x_twitter_video_download_sop.md](phone/sop/x_twitter_video_download_sop.md) | X/Twitter 视频下载（fxtwitter 直链） | - |
 | [youtube_transcript_sop.md](phone/sop/youtube_transcript_sop.md) | YouTube 字幕提取（youtube-transcript-api） | - |
