@@ -98,16 +98,62 @@ def clear_binding(path=None):
     return True
 
 
+def _handler_active_path(handler):
+    """handler 当前活动 goal 路径（abspath）；无活动返回 None。"""
+    if handler is None or not hasattr(handler, '_in_goal_mode'):
+        return None
+    try:
+        v = handler._in_goal_mode()
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        return os.path.abspath(str(v))
+    except Exception:
+        return None
+
+
 def _obs_active(handler):
+    """True 仅当 handler 活动路径 == 当前 GOAL_STATE（契约：绑当前 state）。"""
     if handler is None:
         return False
     if not hasattr(handler, '_in_goal_mode'):
         return handler is _handler and _handler is not None
+    if not GOAL_STATE:
+        return False
+    active = _handler_active_path(handler)
+    if not active:
+        return False
     try:
-        v = handler._in_goal_mode()
-        return v is not None
+        return active == os.path.abspath(str(GOAL_STATE))
     except Exception:
         return False
+
+
+def _refuse_path_mismatch(handler, target, out):
+    """handler 活动路径存在且 ≠ target 时拒绝写盘/收口。True=已拒绝。"""
+    if not target:
+        return False
+    active = _handler_active_path(handler)
+    if not active:
+        return False
+    try:
+        if active == os.path.abspath(str(target)):
+            return False
+    except Exception:
+        return False
+    out['error'] = 'path_mismatch_refuse'
+    out['handler_active_path'] = active
+    out['state_path'] = os.path.abspath(str(target))
+    out['handler_bound'] = _handler is not None
+    out['handler_active'] = False
+    try:
+        data = _load_from(target)
+        out['status'] = data.get('status')
+        out['state'] = dict(data)
+        out['missing'] = False
+    except Exception:
+        out['status'] = out.get('status') or 'missing'
+        out['missing'] = True
+    return True
 
 
 def _coerce_handler(handler):
@@ -213,6 +259,94 @@ def _goal_elapsed(data, now=None):
     paused_at = float(data.get('paused_at') or 0)
     extra = (now - paused_at) if paused_at > 0 else 0.0
     return max(0.0, now - start - paused_seconds - extra)
+
+
+def _format_duration(seconds):
+    """人类可读时长：1h2m3s / 12m34s / 45s。"""
+    try:
+        sec = int(max(0, float(seconds or 0)))
+    except (TypeError, ValueError):
+        sec = 0
+    h, r = divmod(sec, 3600)
+    m, s = divmod(r, 60)
+    if h:
+        return f'{h}h{m}m{s}s'
+    if m:
+        return f'{m}m{s}s'
+    return f'{s}s'
+
+
+def _elapsed_payload(data, now=None):
+    """收口/观测共用：elapsed 秒 + 预算 + 格式化行（扣 paused）。"""
+    now = time.time() if now is None else now
+    data = data or {}
+    elapsed = float(_goal_elapsed(data, now))
+    try:
+        budget = int(data.get('budget_seconds', 3600) or 3600)
+    except (TypeError, ValueError):
+        budget = 3600
+    remaining = max(0, budget - elapsed)
+    try:
+        agent_turns = int(data.get('agent_turns', 0) or 0)
+    except (TypeError, ValueError):
+        agent_turns = 0
+    try:
+        turns_used = int(data.get('turns_used', 0) or 0)
+    except (TypeError, ValueError):
+        turns_used = 0
+    status = str(data.get('status') or '')
+    line = (
+        f"⏱ 实际耗时：{_format_duration(elapsed)}（{int(elapsed)}s）"
+        f" / 预算 {_format_duration(budget)}（{budget}s）"
+        f" · 剩余 {_format_duration(remaining)}（{int(remaining)}s）"
+    )
+    detail = f"agent_turns={agent_turns} · turns_used={turns_used}"
+    if status:
+        detail = f"{detail} · status={status}"
+    return {
+        'elapsed_seconds': int(elapsed),
+        'budget_seconds': budget,
+        'budget_remaining': int(remaining),
+        'elapsed_human': _format_duration(elapsed),
+        'elapsed_line': f"{line}\n   {detail}",
+        'agent_turns': agent_turns,
+        'turns_used': turns_used,
+    }
+
+
+def _append_elapsed_line(text, elapsed_line):
+    """done_prompt 追加耗时行；已含标记则不重复。截断时优先保留 ⏱ 行。"""
+    base = str(text or '').rstrip()
+    marker = '⏱ 实际耗时'
+    el = str(elapsed_line or '')
+    if not el:
+        return base[:_MAX_DONE]
+    if marker in base:
+        # 已有耗时行：若整段超长，尽量保住含 marker 的尾部
+        if len(base) <= _MAX_DONE:
+            return base
+        # 从 marker 起保留到末尾，前缀可砍
+        idx = base.find(marker)
+        tail = base[idx:]
+        if len(tail) >= _MAX_DONE:
+            return tail[:_MAX_DONE]
+        head_budget = _MAX_DONE - len(tail) - 1
+        return (base[:head_budget].rstrip() + '\n' + tail) if head_budget > 0 else tail[:_MAX_DONE]
+    # 追加：为 ⏱ 行预留空间
+    room = _MAX_DONE - len(el) - (1 if base else 0)
+    if room < 0:
+        return el[:_MAX_DONE]
+    head = base[:room].rstrip() if base else ''
+    return f"{head}\n{el}" if head else el
+
+
+def _attach_elapsed(out, data, now=None):
+    """把 elapsed 字段并入 API 返回 dict（原地改 out）。"""
+    if not isinstance(out, dict):
+        return out
+    payload = _elapsed_payload(data, now=now)
+    out.update(payload)
+    return out
 
 
 def _map_done_status(reason):
@@ -329,7 +463,7 @@ def start_goal(objective, *, state_path=None, budget_seconds=3600, max_turns=200
 
 
 def stop_goal(reason='manual', *, handler=None):
-    """running→映射终态；缺文件不抛；无论写盘结果都尝试安全 exit 并清绑定。"""
+    """running→映射终态；附 elapsed；缺文件不抛；无论写盘结果都尝试安全 exit 并清绑定。"""
     global _state
     out = {
         'status': 'missing',
@@ -339,14 +473,27 @@ def stop_goal(reason='manual', *, handler=None):
         'missing': False,
     }
     h = handler if handler is not None else _handler
+    target = os.path.abspath(GOAL_STATE) if GOAL_STATE else None
+    if _refuse_path_mismatch(h, target, out):
+        return out
     try:
         _load()
+        now = time.time()
         if _state.get('status') == 'running':
             _state['status'] = _map_done_status(reason)
+            ep = _elapsed_payload(_state, now=now)
+            # 补写耗时行到 done_prompt（若尚无）
+            _state['done_prompt'] = _append_elapsed_line(
+                _state.get('done_prompt') or f'stopped: {reason}',
+                ep['elapsed_line'],
+            )
             _save()
+        else:
+            ep = _elapsed_payload(_state, now=now)
         # 非 running：不覆盖 status（幂等）
         out['status'] = _state.get('status')
         out['state'] = dict(_state)
+        out.update(ep)
     except RuntimeError:
         out['missing'] = True
         out['status'] = 'missing'
@@ -377,6 +524,9 @@ def pause_goal(reason='user', *, handler=None):
         'paused_at': 0.0,
     }
     h = handler if handler is not None else _handler
+    target = os.path.abspath(GOAL_STATE) if GOAL_STATE else None
+    if _refuse_path_mismatch(h, target, out):
+        return out
     try:
         _load()
     except RuntimeError:
@@ -426,7 +576,7 @@ def pause_goal(reason='user', *, handler=None):
 
 def resume_goal(*, handler=None):
     """paused|done_blocked → running。累计 paused_seconds；enter_goal_mode。"""
-    global _state
+    global _state, _handler
     out = {
         'status': 'missing',
         'state_path': os.path.abspath(GOAL_STATE) if GOAL_STATE else None,
@@ -448,15 +598,19 @@ def resume_goal(*, handler=None):
         out['status'] = 'running'
         out['state'] = dict(_state)
         out['last_summary'] = str(_state.get('last_summary') or '')
-        # 已 running：尽量 re-bind
+        # 已 running：尽量 re-bind；enter 成功必须写模块 _handler
         path = os.path.abspath(GOAL_STATE) if GOAL_STATE else None
         if h is not None and path and hasattr(h, 'enter_goal_mode'):
             try:
                 h.enter_goal_mode(path)
+                _handler = h
                 out['handler_bound'] = True
             except Exception as e:
                 out['error'] = f'enter_failed:{e}'
-        out['handler_active'] = _obs_active(h)
+                out['handler_bound'] = False
+        else:
+            out['handler_bound'] = _handler is not None
+        out['handler_active'] = _obs_active(h if h is not None else _handler)
         return out
 
     if st not in ('paused', 'done_blocked'):
@@ -486,12 +640,16 @@ def resume_goal(*, handler=None):
     if h is not None and path and hasattr(h, 'enter_goal_mode'):
         try:
             h.enter_goal_mode(path)
+            _handler = h
             if hasattr(h, 'working') and isinstance(h.working, dict):
                 h.working['goal_force_fidelity'] = True
             out['handler_bound'] = True
         except Exception as e:
             out['error'] = f'enter_failed:{e}'
-    out['handler_active'] = _obs_active(h)
+            out['handler_bound'] = False
+    else:
+        out['handler_bound'] = _handler is not None
+    out['handler_active'] = _obs_active(h if h is not None else _handler)
     return out
 
 
@@ -540,7 +698,7 @@ def update_goal_objective(new_objective, *, handler=None):
 
 
 def finalize(result, reason='success', *, path=None, handler=None):
-    """成功/主动收口：写 done_prompt + 映射 status；不改 turns_used；幂等。"""
+    """成功/主动收口：写 done_prompt + 映射 status；附 elapsed；不改 turns_used；幂等。"""
     global GOAL_STATE, _state
     h = handler if handler is not None else _handler
     target = os.path.abspath(path) if path else (os.path.abspath(GOAL_STATE) if GOAL_STATE else None)
@@ -555,6 +713,9 @@ def finalize(result, reason='success', *, path=None, handler=None):
         _safe_exit(reason=reason or 'success', handler=h)
         clear_binding(path=None)
         return out
+    # handler 活动在其他 state 时禁止误关当前 target
+    if _refuse_path_mismatch(h, target, out):
+        return out
     try:
         data = _load_from(target)
     except (FileNotFoundError, ValueError, json.JSONDecodeError):
@@ -564,16 +725,23 @@ def finalize(result, reason='success', *, path=None, handler=None):
         clear_binding(path=target)
         return out
 
+    now = time.time()
     if data.get('status') == 'running':
-        data['done_prompt'] = str(result)[:_MAX_DONE]
+        # 先映射终态，再生成耗时行（status 用终态）
         data['status'] = _map_done_status(reason)
+        ep = _elapsed_payload(data, now=now)
+        # 收口写 done_prompt：用户摘要 + ⏱ 实际耗时行
+        data['done_prompt'] = _append_elapsed_line(result, ep['elapsed_line'])
         # 不改 turns_used
         _save_to(target, data)
         if GOAL_STATE and os.path.abspath(GOAL_STATE) == target:
             _state = dict(data)
-    # 已终态：不覆盖 status
+    else:
+        ep = _elapsed_payload(data, now=now)
+    # 已终态：不覆盖 status；仍回传 elapsed（基于现有 state）
     out['status'] = data.get('status')
     out['state'] = dict(data)
+    out.update(ep)
 
     # exit + 清绑定：临时对齐 GOAL_STATE 使 _safe_exit 路径匹配；clear 始终 path 守卫
     prev_gs = GOAL_STATE
@@ -727,8 +895,11 @@ def auto_tick(path, turn, summary_hint=''):
     # 3) 墙钟：elapsed > budget（严格 >）
     if elapsed > budget:
         data['status'] = 'done_budget'
-        if not (data.get('done_prompt') or '').strip():
-            data['done_prompt'] = f'budget exhausted after {agent_turns} agent turns'
+        ep = _elapsed_payload(data, now=now)
+        base_prompt = (data.get('done_prompt') or '').strip() or (
+            f'budget exhausted after {agent_turns} agent turns'
+        )
+        data['done_prompt'] = _append_elapsed_line(base_prompt, ep['elapsed_line'])
         try:
             _save_to(path, data)
         except Exception as e:
@@ -737,14 +908,21 @@ def auto_tick(path, turn, summary_hint=''):
         out['should_stop'] = True
         out['status'] = 'done_budget'
         out['reason'] = 'done_budget'
-        print(f'[goal_mode] auto_tick budget 耗尽({budget}s) 自动收口 path={path}')
+        out.update(ep)
+        print(
+            f'[goal_mode] auto_tick budget 耗尽({budget}s) 自动收口 '
+            f'elapsed={int(elapsed)}s path={path}'
+        )
         return out
 
     # 4) 协议轮 turns_used >= max_turns（不用 agent_turns）
     if turns_used >= max_turns:
         data['status'] = 'done_turns'
-        if not (data.get('done_prompt') or '').strip():
-            data['done_prompt'] = f'turns exhausted {turns_used}/{max_turns}'
+        ep = _elapsed_payload(data, now=now)
+        base_prompt = (data.get('done_prompt') or '').strip() or (
+            f'turns exhausted {turns_used}/{max_turns}'
+        )
+        data['done_prompt'] = _append_elapsed_line(base_prompt, ep['elapsed_line'])
         try:
             _save_to(path, data)
         except Exception as e:
@@ -753,7 +931,11 @@ def auto_tick(path, turn, summary_hint=''):
         out['should_stop'] = True
         out['status'] = 'done_turns'
         out['reason'] = 'done_turns'
-        print(f'[goal_mode] auto_tick turns 耗尽({turns_used}/{max_turns}) path={path}')
+        out.update(ep)
+        print(
+            f'[goal_mode] auto_tick turns 耗尽({turns_used}/{max_turns}) '
+            f'elapsed={int(elapsed)}s path={path}'
+        )
         return out
 
     # 5) 未触顶：写盘 last_*/agent_turns
@@ -765,11 +947,14 @@ def auto_tick(path, turn, summary_hint=''):
     out['should_stop'] = False
     out['status'] = 'running'
     out['reason'] = ''
+    # 观测字段：运行中也带 elapsed（便于 status 对齐）
+    out['elapsed_seconds'] = int(elapsed)
+    out['elapsed_human'] = _format_duration(elapsed)
     return out
 
 
 def status(*, handler=None):
-    """只读观测；缺文件 missing=True，不写盘、不 enter/exit。"""
+    """只读观测；缺文件 missing=True，不写盘、不 enter/exit。含 elapsed 字段。"""
     h = handler if handler is not None else _handler
     out = {
         'state_path': os.path.abspath(GOAL_STATE) if GOAL_STATE else None,
@@ -788,6 +973,7 @@ def status(*, handler=None):
         out['budget_remaining'] = max(0, budget - elapsed)
         out['turns_remaining'] = max(0, max_turns - turns)
         out['agent_turns'] = int(st.get('agent_turns', 0) or 0)
+        _attach_elapsed(out, st, now=now)
     except FileNotFoundError:
         out['missing'] = True
     except Exception:
@@ -806,9 +992,15 @@ def check():
     budget = int(_state.get('budget_seconds', 3600))
     elapsed = _goal_elapsed(_state, now)
     if elapsed > budget:
+        # 先终态再写耗时行（status 用 done_budget）
         _state['status'] = 'done_budget'
+        ep = _elapsed_payload(_state, now=now)
+        base = (_state.get('done_prompt') or '').strip() or (
+            f'budget exhausted after {int(_state.get("agent_turns") or 0)} agent turns'
+        )
+        _state['done_prompt'] = _append_elapsed_line(base, ep['elapsed_line'])
         _save()
-        print(f'[goal_mode] budget 耗尽({budget}s) 自动收口')
+        print(f'[goal_mode] budget 耗尽({budget}s) 自动收口 elapsed={int(elapsed)}s')
         _safe_exit(reason='done_budget')
         clear_binding(path=None)
         return None
@@ -816,8 +1008,13 @@ def check():
     max_turns = int(_state.get('max_turns', 200))
     if turns >= max_turns:
         _state['status'] = 'done_turns'
+        ep = _elapsed_payload(_state, now=now)
+        base = (_state.get('done_prompt') or '').strip() or (
+            f'turns exhausted after {int(_state.get("agent_turns") or 0)} agent turns'
+        )
+        _state['done_prompt'] = _append_elapsed_line(base, ep['elapsed_line'])
         _save()
-        print(f'[goal_mode] turns 耗尽({turns}/{max_turns}) 自动收口')
+        print(f'[goal_mode] turns 耗尽({turns}/{max_turns}) 自动收口 elapsed={int(elapsed)}s')
         _safe_exit(reason='done_turns')
         clear_binding(path=None)
         return None
@@ -843,7 +1040,6 @@ def on_done(result):
         return
 
     _state['turns_used'] = int(_state.get('turns_used', 0) or 0) + 1
-    _state['done_prompt'] = str(result)[:_MAX_DONE]
     turns = _state['turns_used']
     max_turns = int(_state.get('max_turns', 200))
     now = time.time()
@@ -851,20 +1047,33 @@ def on_done(result):
     elapsed = _goal_elapsed(_state, now)
 
     if turns >= max_turns:
+        # 先终态再生成耗时行
         _state['status'] = 'done_turns'
+        ep = _elapsed_payload(_state, now=now)
+        _state['done_prompt'] = _append_elapsed_line(result, ep['elapsed_line'])
         _save()
-        print(f"[goal_mode] round {turns} done, status=done_turns")
+        print(
+            f"[goal_mode] round {turns} done, status=done_turns "
+            f"elapsed={int(elapsed)}s"
+        )
         _safe_exit(reason='done_turns')
         clear_binding(path=None)
         return
 
     if elapsed > budget:
         _state['status'] = 'done_budget'
+        ep = _elapsed_payload(_state, now=now)
+        _state['done_prompt'] = _append_elapsed_line(result, ep['elapsed_line'])
         _save()
-        print(f"[goal_mode] round {turns} done, status=done_budget")
+        print(
+            f"[goal_mode] round {turns} done, status=done_budget "
+            f"elapsed={int(elapsed)}s"
+        )
         _safe_exit(reason='done_budget')
         clear_binding(path=None)
         return
 
+    # 中间轮：保留 result 原文（未终态不必强制耗时行）
+    _state['done_prompt'] = str(result)[:_MAX_DONE]
     _save()
     print(f"[goal_mode] round {turns} done, status={_state.get('status')}")
