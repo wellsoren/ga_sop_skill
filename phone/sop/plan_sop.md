@@ -44,6 +44,7 @@ tools_mode: lax                 # SOP级默认; 阶段1探索态覆盖为 strict
 ### 1.3 环境依赖
 - 单 Agent，无 subagent → 子代理 Plan 模式（planAgent）不可用，由主 agent 自执行
 - 无需额外 API Key / 软件依赖
+- 🔴 **最低运行时版本**：本 SOP 依赖 GA 标准协议 **`handler.enter_plan_mode()`** 与 **`code_run` 的 `inline_eval=True`（自动注入 handler）**——这两项是 GA/CC 出厂即内置的基础能力（见 `ga_android.py` 的 `GenericAgentHandler`）。若运行环境的 GA 版本不支持上述任一调用，本 SOP 的「进入规划态」步骤无法生效，请先在 GA 应用内更新/适配后再使用本 SOP。**与 `ga_android.py`/`agent_loop.py`/`run_guard.py` 的具体实现版本无关，它们始终为 GA 自带。**
 
 ## 二、能力总览
 
@@ -56,6 +57,8 @@ tools_mode: lax                 # SOP级默认; 阶段1探索态覆盖为 strict
 | 提交审批 | ask_user 确认门 | 等价 CC ExitPlanMode 的 `checkPermissions → 'ask'` |
 | 执行跟踪 | 计划文件内 checkbox 任务图 | 开态=`[ ]`/`[D]`/`[?]`；完成须 `[✓ 结论 | 证据:]`；等价 CC TodoWriteTool |
 | 独立验证 | 主 agent 切"独立评委"角色 | 对抗性验证交付物 |
+
+> **运行时增强项（可选，非必要条件）**：部分 GA 版本（本 SOP 开发环境）额外内置了自动化护栏——如**完成声明拦截**（`_check_plan_completion`：计划文件还有开态却声称完成时被强制拦回）与 **L1 独白/完成声明检测**（`_is_l1_monologue`：识别无证据的"完成任务"独白并强制返回取证）。**这些是加分项不是依赖**：运行环境若缺失，不影响本 SOP 的 6 步规划主流程，仅少了自动防呆；请以正文「🛑 终止检查」与「阶段 5 独立评委 VERDICT」为准绳，人工守住完成判定。
 
 ## 三、快速参考
 
